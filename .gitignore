@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.env
+*.token
+token*.txt
+resultados/
+# registros que genera el bot al jugar (no se suben)
+partida.log
+decisiones.jsonl
+manos.jsonl
+rivales.json
+rivales.json.tmp
