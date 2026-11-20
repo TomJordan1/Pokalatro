@@ -10,3 +10,6 @@ decisiones.jsonl
 manos.jsonl
 rivales.json
 rivales.json.tmp
+tools/slumbot_err.log
+*.exe
+*.dll

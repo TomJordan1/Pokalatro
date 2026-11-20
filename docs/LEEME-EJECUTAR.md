@@ -9,20 +9,26 @@ Comprobar que Python está:
 python --version
 ```
 
-## 1. Probar que el bot está sano (30 segundos)
+## 1. Probar que el bot está sano (1-2 minutos)
 
-Desde la carpeta del bot:
+Desde la carpeta del repositorio:
 
 ```powershell
-cd "$env:USERPROFILE\Desktop\Pokalatro"
-python -m unittest -v
+python -m unittest discover -s tests -v
 ```
 
-Tienen que decir `ok` las 13 pruebas y terminar en `OK`. Una de ellas fuerza a propósito
-un error en la estrategia y por eso imprime un `Traceback`: eso es lo esperado, lo que
-comprueba es que el bot responde `check` en vez de caerse.
+Tienen que decir `ok` las **30 pruebas** (`test_estrategia` + `test_v9`) y terminar en `OK`. Una de ellas fuerza a propósito un error en la estrategia y por eso imprime un `Traceback`: eso es lo esperado, lo que comprueba es que el bot responde `check` en vez de caerse.
 
-## 2. Conectarse al servidor de pruebas
+## 2. Estructura del repositorio
+
+- `bot.py` / `conectar.bat`: lanzadores compatibles desde la raíz.
+- `app/`: código fuente de producción en Python 3.8+ puro (`estrategia.py`, `preflop.py`, `postflop.py`, `motor.py`, `abstraccion.py`, `blueprint_data.py`, `rangos.py`, `stats.py`, `subjuego.py`, `torneo.py`, `turno.py`, `conexion.py`).
+- `tests/`: pruebas unitarias, de protocolo TCP y fuzz (`test_estrategia.py`, `test_v9.py`).
+- `docs/`: documentación técnica, auditoría de v8, diseño de v9, reporte experimental y `CHANGELOG.md`.
+- `tools/`: simulador PokerFight (`simulador_pf.py`), bots del kit (`bots_kit.py`), benchmark pareado (`benchmark.py`), entrenador C++ (`trainer_cfr.cpp`) y arena HUNL contra Slumbot2019 (`slumbot_arena.py`).
+- `backup_v8/`: copia intacta de referencia de Pokalatro v8.
+
+## 3. Conectarse al servidor de pruebas
 
 El token es secreto: se pasa **solo por la línea de comandos**, nunca escrito en un
 archivo del repositorio.

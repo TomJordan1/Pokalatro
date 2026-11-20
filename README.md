@@ -1,92 +1,64 @@
-# Pokalatro — bot para PokerFight (versión v8)
+# Pokalatro v9 — Bot Híbrido para PokerFight
 
-Al conectarse, el bot imprime su versión: `Pokalatro v8 conectado como ...`.
+Bot de Texas Hold'em No-Limit desarrollado en **Python puro** (3.8+, cero dependencias externas en producción) para competir en los torneos de **PokerFight** por TCP JSON Lines (protocolo `1.0.0`).
 
-Bot de Texas Hold'em no-limit en **Python puro** (3.8+, sin dependencias). Se conecta
-por TCP a la arena, recibe sus cartas en JSON (una línea por mensaje) y responde una
-acción válida en milisegundos.
+Al conectarse anuncia su versión (`Pokalatro v9 conectado como ...`).
 
-## La idea en un párrafo
+---
 
-Casi todos los bots de reglas deciden con la fuerza de su mano *contra una mano al
-azar*. Eso sobrevalora las manos: el rival que sigue en el pozo y acaba de subir no
-tiene una mano al azar, tiene una buena. Pokalatro estima primero **qué rango de
-manos puede tener cada rival** (según lo que hizo en la mano, sus estadísticas de todo
-el torneo y las cartas que mostró en showdowns anteriores) y recién entonces calcula
-por Monte Carlo **su probabilidad real de ganar contra ese rango**. Esa cifra se
-compara con las pot odds: si gana más seguido de lo que cuesta pagar, paga.
+## Arquitectura híbrida (5 componentes)
 
-## Cómo decide
+Pokalatro v9 conserva toda la robustez en tiempo real de v8 (filtro estricto de `acciones_validas`, corte por presupuesto temporal, fallback seguro ante excepciones y reconexión persistente con `-persistente`) e introduce una arquitectura híbrida en `app/`:
 
-| Etapa | Qué hace |
+1. **Abstracción estratégica (`app/abstraccion.py`)**: orden realista de jugabilidad para 169 manos iniciales y clasificación postflop por `made_tier` (0..6), `draw_tier` (0..3 sin falsos positivos), `nut_blocker`, `SPR`, textura y `facing`.
+2. **Blueprint offline CFR+ / MCCFR (`app/blueprint_data.py`, entrenado con `tools/trainer_cfr.cpp`)**: tablas de equilibrio Nash Push/Fold interpoladas (5–14 BB), apertura/defensa profunda (`EP/CO/BTN`) y política postflop de 3M iteraciones External-Sampling MCCFR como ancla ante muestras pequeñas.
+3. **Modelado bayesiano continuo (`app/rangos.py` + `app/stats.py`)**: distribución ponderada sobre las 1 326 combinaciones actualizada secuencialmente por acciones, tamaño de apuesta, *capping* pasivo preflop, decaimiento estadístico durante el torneo y calibración por showdowns.
+4. **Explotación regularizada (`app/preflop.py` + `app/postflop.py`)**: adaptación acotada por confianza estadística hacia estaciones de pago, nits y perfiles agresivos (`loco`), evitando sobreajustar con muestras chicas.
+5. **Subjuego River HU + Gestión de Torneo (`app/subjuego.py` + `app/torneo.py`)**: integración exacta de EV en river heads-up con regularización MDF y margen de polarización, junto con prima de supervivencia y presión de eliminación ajustadas al formato PokerFight.
+
+---
+
+## Resumen de resultados validados (v9 vs v8)
+
+| Experimento | Pokalatro v8 | Pokalatro v9 | Diferencia / Significancia |
+| --- | --- | --- | --- |
+| **Clasificatoria 5-max vs kit** (200 mesas) | +4 536.9 (Top-1 31.0%, Top-3 81.5%) | **+4 788.0** (Top-1 30.5%, **Top-3 84.5%**) | +251.0 fichas/mesa, latencia med **17.76 ms** (`vs 50.79 ms`) |
+| **Torneo acumulativo 10 rondas (`torneo10`)** (40 torneos) | +26 030.7 (Top-6 70.0%, Quiebras 57.5%) | **+34 022.0** (**Top-6 80.0%**, **Quiebras 42.5%**) | **+7 991.2** fichas/torneo, campeón **32.5% vs 27.5%** |
+| **Estrés `[fuertes]`** (120 mesas) | +3 007.7 (Top-1 20.8%, Quiebras 11.7%) | **+6 393.1** (**Top-1 33.3%**, **Quiebras 5.8%**) | **+3 385.4 (`p = 0.0011`)** |
+| **Estrés `[adverso]`** (120 mesas) | +3 004.9 (Top-1 15.8%, Quiebras 11.7%) | **+5 961.0** (**Top-1 27.5%**, **Top-3 94.2%**) | **+2 956.1 (`p = 0.0268`)** |
+| **Estrés `[duro]`** (120 mesas) | +2 429.9 (Top-1 20.0%, Quiebras 14.2%) | **+5 552.8** (**Top-1 30.0%**, **Quiebras 6.7%**) | **+3 122.8 (`p = 0.0012`)** |
+| **Duelo duplicado HUNL vs Slumbot2019 local** (800 manos) | — | **+57 995 fichas** (`+724.9 mbb/h`) | **4/4 bloques ganados** |
+| **Suite de pruebas (`tests/`)** | — | **30 / 30 OK** | 0 fallos, 0 timeouts |
+
+Detalle experimental completo en [`docs/EXPERIMENTOS.md`](docs/EXPERIMENTOS.md).
+
+---
+
+## Estructura de carpetas
+
+| Ruta | Contenido |
 | --- | --- |
-| **Antes del flop** | Tabla de las 169 manos iniciales con su equity real (`tabla_preflop.py`, generada por Monte Carlo). Abre con un porcentaje de manos que depende de la posición, de cuántos rivales quedan por hablar y de cuánto se retiran esos rivales. Ante una subida, calcula equity contra el rango del subidor y la compara con las pot odds. |
-| **Después del flop** | Cada acción del rival filtra su rango por la fuerza de cada mano **en las cartas comunitarias reales**: quien resube el river tiene escalera o trío en esta mesa, no "una buena mano inicial". Contra ese rango, equity Monte Carlo (~2 µs por mano evaluada). Apuesta grande por valor cuando va adelante, paga solo cuando la equity supera las pot odds con margen, y farolea poco: los bots de umbral fijo pagan demasiado. |
-| **Tamaño de apuesta** | Según la equity y la textura de la mesa: más caro en mesas húmedas (proyectos de color o escalera) y contra rivales que pagan todo; más barato contra los que se retiran igual. |
-| **Stack corto** | Con 12 ciegas o menos, all-in o nada: nunca una subida corta que la mesa pueda rechazar. |
+| `bot.py` / `conectar.bat` | Lanzadores compatibles desde la raíz (delegan en `app/bot.py`). |
+| [`app/`](app/) | Bot de producción en Python 3.8+ puro (`estrategia.py`, `preflop.py`, `postflop.py`, `motor.py`, `abstraccion.py`, `blueprint_data.py`, `rangos.py`, `stats.py`, `subjuego.py`, `torneo.py`, `turno.py`, `conexion.py`, `tabla_preflop.py`, `bot.py`). |
+| [`tests/`](tests/) | Pruebas unitarias, de protocolo TCP real y fuzz ([`test_estrategia.py`](tests/test_estrategia.py), [`test_v9.py`](tests/test_v9.py)). |
+| [`docs/`](docs/) | [`INFORME_INVESTIGACION.md`](docs/INFORME_INVESTIGACION.md), [`AUDITORIA_V8.md`](docs/AUDITORIA_V8.md), [`ARQUITECTURA_V9.md`](docs/ARQUITECTURA_V9.md), [`EXPERIMENTOS.md`](docs/EXPERIMENTOS.md), [`CHANGELOG.md`](docs/CHANGELOG.md), [`LEEME-EJECUTAR.md`](docs/LEEME-EJECUTAR.md), [`RESULTADOS.md`](docs/RESULTADOS.md). |
+| [`tools/`](tools/) | Simulador fiel de PokerFight (`simulador_pf.py`), bots del kit (`bots_kit.py`), evaluador C++ rápido (`fast_eval.cpp`/`dll`), entrenador CFR+/MCCFR (`trainer_cfr.cpp`), benchmark estadístico (`benchmark.py`) y arena Slumbot2019 (`slumbot_arena.py`). |
+| [`backup_v8/`](backup_v8/) | Copia intacta de referencia de Pokalatro v8. |
 
-Tres correcciones sobre la cuenta de equity, que son las que evitan los errores caros:
+---
 
-- **Realización.** Un proyecto no cobra su equity entera: antes del river hay que pagar
-  más apuestas. Fuera de posición, menos todavía.
-- **Ruina.** En un torneo con eliminación, jugarse el stack entero exige más equity que
-  jugarse una ciega. Con una sola pareja no se arma un pozo enorme.
-- **Rival.** A quien paga todo se le cobra más y no se le farolea; a quien se retira
-  mucho se le roba más seguido.
+## Ejecución rápida
 
-## Robustez (la prioridad número uno)
+```powershell
+# Ejecutar las 30 pruebas automatizadas
+python -m unittest discover -s tests -v
 
-Un timeout o una acción inválida cuestan lo mismo: la mesa juega por nosotros y nos
-anota una penalización. Por eso:
+# Conectar el bot al servidor de PokerFight (o vía app/bot.py)
+python bot.py -addr HOST:PUERTO -token "$env:TOKEN" -persistente
 
-- Toda decisión pasa por un último filtro que solo deja salir acciones que están en
-  `acciones_validas`, con el monto corregido a la subida mínima y el all-in declarado
-  como `allin` (nunca como una subida corta).
-- Si la estrategia lanza una excepción, el despachador responde la acción segura
-  (`check`, o `fold` si hay que pagar). Hay un test que lo fuerza.
-- El cálculo de equity corta por tiempo, no por cantidad de simulaciones: nunca se pasa
-  del plazo aunque la máquina esté cargada.
-- `-persistente` reconecta siempre con el mismo token, así la mesa devuelve la silla y
-  las fichas.
-- El azar se siembra con la mano y la situación: la misma situación da siempre la misma
-  jugada (se puede reproducir un error) pero un rival no la puede predecir.
-
-## Resultados en pruebas locales
-
-Simulacro del torneo: mesas de 5 con el formato de la clasificatoria (50 manos,
-10 000 fichas, ciegas 50/100), con los 4 rivales sorteados entre los 8 bots del kit.
-
-| Medida | Valor |
-| --- | --- |
-| Puesto entre los 9 bots (simulacro de torneo, 2 × 80 mesas) | **1.º en las dos tandas** |
-| Fichas netas por mesa de 50 manos | +3 973 y +5 519 |
-| Timeouts y acciones inválidas | 0 |
-| Tiempo por decisión | mediana 33 ms, máximo 66 ms (el plazo es de 5 000 ms) |
-
-## Archivos
-
-| Archivo | Qué contiene |
-| --- | --- |
-| `bot.py` | Bucle de mensajes y reconexión. |
-| `conexion.py` | TCP y JSON Lines (protocolo 1.0.0). |
-| `estrategia.py` | Despachador: elige preflop o postflop y garantiza acción válida. |
-| `preflop.py` | Decisiones antes del flop. |
-| `postflop.py` | Decisiones en flop, turn y river. |
-| `motor.py` | Evaluador de manos, percentiles, textura de mesa y equity Monte Carlo. |
-| `rangos.py` | Estimación del rango de cada rival. |
-| `stats.py` | Estadísticas por rival, acumuladas en todo el torneo. |
-| `turno.py` | Ayudantes de apuestas y posición. |
-| `tabla_preflop.py` | Equity de las 169 manos iniciales (generada, no se edita a mano). |
-| `test_estrategia.py` | Pruebas, incluida una de 1 500 situaciones al azar. |
-
-## Ejecutar
-
-Ver `LEEME-EJECUTAR.md`. En resumen:
-
-```bash
-python bot.py -addr HOST:PUERTO -token $TOKEN -persistente
-python -m unittest -v
+# Reproducir benchmark pareado o torneo de 10 rondas
+python -m tools.benchmark --n-mesas 200 --seed 2026 --modo comparar --rivales kit
+python -m tools.benchmark --n-mesas 40 --seed 2026 --modo torneo10
 ```
 
-El código del kit de la competencia no se modifica: este bot vive en su propio
-repositorio y solo usa el protocolo documentado.
+Ver guía operativa completa en [`docs/LEEME-EJECUTAR.md`](docs/LEEME-EJECUTAR.md).
