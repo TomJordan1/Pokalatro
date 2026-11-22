@@ -51,7 +51,7 @@ Cada vez que la mesa envía `solicitar_accion`, Pokalatro ejecuta una secuencia 
 ## Arquitectura híbrida (5 componentes)
 
 1. **Abstracción estratégica (`app/abstraccion.py`):** orden realista de jugabilidad para 169 manos iniciales y clasificación postflop (`made_tier`, `draw_tier`, `nut_blocker`, `SPR`, textura y `facing`).
-2. **Blueprint offline CFR+ / MCCFR (`app/blueprint_data.py`, entrenado con `tools/trainer_cfr.cpp`):** tablas Push/Fold, `PREFLOP_DEEP` y 3M iteraciones MCCFR postflop.
+2. **Blueprint offline CFR+ / Linear MCCFR (`app/blueprint_data.py`, `app/blueprint_6max.py`, entrenados con `tools/trainer_cfr.cpp` y `tools/trainer_pluribus_6max.cpp`):** tablas Push/Fold, `PREFLOP_DEEP`, 3M iteraciones MCCFR postflop y 2.5M manos 6-max simultáneas en Linear External-Sampling MCCFR.
 3. **Modelado bayesiano continuo (`app/rangos.py` + `app/stats.py`):** verosimilitud sobre 1 326 combos, *capping* pasivo, decaimiento estadístico y calibración por showdowns.
 4. **Explotación regularizada (`app/preflop.py` + `app/postflop.py`):** adaptación acotada por confianza estadística (`estacion`, `nit`, `loco`) y control de riesgo en re-subidas y semi-faroles.
 5. **Subjuego River HU + Gestión de Torneo (`app/subjuego.py` + `app/torneo.py`):** EV exacto en river HU con MDF y prima de supervivencia ajustada a PokerFight.
@@ -68,7 +68,7 @@ Cada vez que la mesa envía `solicitar_accion`, Pokalatro ejecuta una secuencia 
 | **Estrés `[adverso]`** (120 mesas) | +3 004.9 (Top-1 15.8%, Quiebras 11.7%) | **+5 961.0** (**Top-1 27.5%**, **Top-3 94.2%**) | **+2 956.1 (`p = 0.0268`)** |
 | **Estrés `[duro]`** (120 mesas) | +2 429.9 (Top-1 20.0%, Quiebras 14.2%) | **+5 552.8** (**Top-1 30.0%**, **Quiebras 6.7%**) | **+3 122.8 (`p = 0.0012`)** |
 | **Duelo duplicado HUNL vs Slumbot2019 local** (800 manos) | — | **+57 995 fichas** (`+724.9 mbb/h`) | **4/4 bloques ganados** |
-| **Suite de pruebas (`tests/`)** | — | **30 / 30 OK** | 0 fallos, 0 timeouts |
+| **Suite de pruebas (`tests/`)** | — | **32 / 32 OK** | 0 fallos, 0 timeouts |
 
 Detalle experimental completo (incluyendo estudio de ablación de los 5 componentes) en [`docs/EXPERIMENTOS.md`](docs/EXPERIMENTOS.md).
 
@@ -79,10 +79,10 @@ Detalle experimental completo (incluyendo estudio de ablación de los 5 componen
 | Ruta | Contenido |
 | --- | --- |
 | `bot.py` / `conectar.bat` | Lanzadores compatibles desde la raíz (delegan en `app/bot.py`). |
-| [`app/`](app/) | Bot de producción en Python 3.8+ puro (`estrategia.py`, `preflop.py`, `postflop.py`, `motor.py`, `abstraccion.py`, `blueprint_data.py`, `rangos.py`, `stats.py`, `subjuego.py`, `torneo.py`, `turno.py`, `conexion.py`, `tabla_preflop.py`, `bot.py`). |
+| [`app/`](app/) | Bot de producción en Python 3.8+ puro (`estrategia.py`, `preflop.py`, `postflop.py`, `motor.py`, `abstraccion.py`, `blueprint_data.py`, `blueprint_6max.py`, `rangos.py`, `stats.py`, `subjuego.py`, `torneo.py`, `turno.py`, `conexion.py`, `tabla_preflop.py`, `bot.py`). |
 | [`tests/`](tests/) | Pruebas unitarias, de protocolo TCP real y fuzz ([`test_estrategia.py`](tests/test_estrategia.py), [`test_v9.py`](tests/test_v9.py)). |
 | [`docs/`](docs/) | [`INFORME_INVESTIGACION.md`](docs/INFORME_INVESTIGACION.md), [`AUDITORIA_V8.md`](docs/AUDITORIA_V8.md), [`ARQUITECTURA_V9.md`](docs/ARQUITECTURA_V9.md), [`EXPERIMENTOS.md`](docs/EXPERIMENTOS.md), [`CHANGELOG.md`](docs/CHANGELOG.md), [`LEEME-EJECUTAR.md`](docs/LEEME-EJECUTAR.md), [`RESULTADOS.md`](docs/RESULTADOS.md). |
-| [`tools/`](tools/) | Simulador fiel de PokerFight (`simulador_pf.py`), bots del kit (`bots_kit.py`), evaluador C++ rápido (`fast_eval.cpp`), entrenador CFR+/MCCFR (`trainer_cfr.cpp`), benchmark estadístico (`benchmark.py`) y arena Slumbot2019 (`slumbot_arena.py`). |
+| [`tools/`](tools/) | Simulador fiel de PokerFight (`simulador_pf.py`), bots del kit (`bots_kit.py`), evaluador C++ rápido (`fast_eval.cpp`), entrenadores CFR+/Linear MCCFR (`trainer_cfr.cpp`, `trainer_pluribus_6max.cpp`), benchmark estadístico (`benchmark.py`) y arena Slumbot2019 (`slumbot_arena.py`). |
 | [`backup_v8/`](backup_v8/) | Copia intacta de referencia de Pokalatro v8. |
 
 ---
@@ -90,7 +90,7 @@ Detalle experimental completo (incluyendo estudio de ablación de los 5 componen
 ## Ejecución rápida
 
 ```powershell
-# Ejecutar las 30 pruebas automatizadas
+# Ejecutar las 32 pruebas automatizadas
 python -m unittest discover -s tests -v
 
 # Conectar el bot al servidor de PokerFight (o vía app/bot.py)

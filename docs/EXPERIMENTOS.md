@@ -122,4 +122,16 @@ Comando ejecutado tras congelar `app/`:
 python -m unittest discover -s tests -v
 ```
 
-Resultado verificado: **`Ran 30 tests in 82.453s — OK`** (19 pruebas heredadas de `test_estrategia.py` incluyendo fuzz de miles de escenarios aleatorios + 11 pruebas nuevas de `test_v9.py` incluyendo sesión TCP loopback real y mensajes JSON corruptos).
+Resultado verificado: **`Ran 32 tests in 55.961s — OK`** (19 pruebas heredadas de `test_estrategia.py` incluyendo fuzz de miles de escenarios aleatorios + 13 pruebas nuevas de `test_v9.py` incluyendo `blueprint_6max`, regresión ante 4-bet/river, sesión TCP loopback real y mensajes JSON corruptos).
+
+---
+
+## 7. Experimentos adicionales A/B (regla estricta: solo conservar mejoras reales)
+
+1. **Linear External-Sampling MCCFR 6-max (`app/blueprint_6max.py`, 2.5M manos) — CONSERVADO:**
+   - En `fuertes` (120 mesas pareadas): **EV `+6 403.6` vs `+5 949.6` (`+454.0`)**, 1.º puesto **`33.3%` vs `29.2%`**, Top-3 **`86.7%` vs `81.7%`**, quiebras **`5.0%` vs `8.3%`**.
+   - En `torneo10` (40 torneos carryover): clasificación Top-6 **`80.0%` vs `75.0%`**, quiebras **`42.5%` vs `50.0%`**.
+2. **DLS analítico de 4 continuaciones en Turn/River — DESCARTADO:**
+   - Reemplazar `resolver_river_hu` y el Turn por un DLS analítico sin rollouts completos de showdown en C++ empeoró `kit` (`-1 016.8`, Bust `17.5%`), `fuertes` (`-1 445.8`) y `torneo10` (`-17 454.4`, `p=0.047`), por lo que fue revertido.
+3. **Relajación de supervivencia en mesa corta (2–3 jugadores) — DESCARTADO:**
+   - Relajar `minimo_por_supervivencia` para presionar más en mesas de 2–3 jugadores subió la tasa de quiebras en todos los escenarios (`10.0% -> 12.5%` en `kit`, `5.8% -> 6.7%` en `fuertes`, `8.3% -> 11.7%` en `adverso`) y cayó `-6 506.9` en `torneo10` (`1ro 40.0% -> 35.0%`), por lo que fue revertido.

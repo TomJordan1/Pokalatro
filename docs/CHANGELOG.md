@@ -21,6 +21,7 @@ El proyecto se organizó en módulos segregados manteniendo compatibilidad total
   - `PUSH_FOLD`: equilibrio Nash Push/Fold interpolado para stacks de 5, 8, 11 y 14 BB (heads-up y multiway).
   - `PREFLOP_DEEP`: frecuencias de equilibrio para `EP`, `CO` y `BTN`.
   - `POSTFLOP_BP`: política MCCFR de 3M iteraciones sobre estados estratégicos postflop.
+- **`app/blueprint_6max.py`**: blueprint 6-max (`UTG`, `HJ`, `CO`, `BTN`, `SB`, `BB`) entrenado con **Linear External-Sampling MCCFR** sobre 2 500 000 manos reales simultáneas (`tools/trainer_pluribus_6max.cpp`), cubriendo 1 974 estados postflop 6-max e integrado en `app/preflop.py` y `app/postflop.py`.
 - **`app/subjuego.py`**: resolvedor local exacto de subjuego en el river heads-up (`resolver_river_hu`) que integra EV sobre la distribución bayesiana completa del rival con regularización por MDF y margen de seguridad ante apuestas polarizadas en river.
 - **`app/torneo.py`**: gestión específica para el formato PokerFight (50/100 fijas, 10k iniciales, carryover de 10 rondas y eliminación en 0): consulta interpolada `probs_push_fold`, prima de supervivencia (`minimo_por_supervivencia`) acotada incluso en situaciones de eliminación directa y `factor_presion_eliminacion`.
 - **`app/__init__.py`**: definición del paquete `app`.
@@ -50,10 +51,10 @@ El proyecto se organizó en módulos segregados manteniendo compatibilidad total
 
 ## Pruebas (`tests/`) y herramientas offline (`tools/`)
 
-- **`tests/test_v9.py`**: 11 nuevas pruebas unitarias y de protocolo TCP loopback real (posicionamiento con eliminados, pot odds sin exceso, no pagar 100bb all-in con 77, ranking jugabilidad AKo/AQs > 99, rangos bayesianos loco vs nit, showdown BB check, subjuego river HU, push/fold y sesión TCP real con JSON corrupto).
+- **`tests/test_v9.py`**: 13 pruebas unitarias y de protocolo TCP loopback real (posicionamiento con eliminados, pot odds sin exceso, no pagar 100bb all-in con 77, ranking jugabilidad AKo/AQs > 99, rangos bayesianos loco vs nit, showdown BB check, subjuego river HU, push/fold, tabla `blueprint_6max`, regresión 4-bet/river y sesión TCP real con JSON corrupto).
 - **`tests/test_estrategia.py`**: migrado a `tests/` con resolución de ruta hacia `app/`.
 - **`tools/simulador_pf.py` y `tools/bots_kit.py`**: simulador exacto de PokerFight en Python (crupier, side pots, all-ins cortos, orden de eliminación, carryover 10 rondas) y réplica de los 8 bots oficiales + bots de estrés (`BotExplotador`, `BotCambiante`) apoyados en `tools/fast_eval.dll`.
-- **`tools/trainer_cfr.cpp`**: generador C++ offline de la matriz de equity 169x169, CFR+ Push/Fold, CFR+ Preflop profundo y External-Sampling MCCFR postflop (3M iteraciones).
+- **`tools/trainer_cfr.cpp` y `tools/trainer_pluribus_6max.cpp`**: generadores C++ offline de CFR+ Push/Fold, `PREFLOP_DEEP`, MCCFR postflop (3M iteraciones) y Linear External-Sampling MCCFR 6-max (2.5M manos reales de 6 sillas simultáneas).
 - **`tools/benchmark.py`**: suite estadística pareada con semillas deterministas, IC 95%, test t pareado, modos `comparar`, `estres`, `torneo10` y `ablacion`.
 - **`tools/slumbot_arena.py`**: puente TCP ACPC 2.0.0 para evaluar partidas duplicadas HUNL contra `slumbot2019/bin/run_bot`.
 
