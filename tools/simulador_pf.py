@@ -57,8 +57,8 @@ class PokalatroAdapter(BotAdapter):
         saved_mods = {}
         mod_names = [
             "tabla_preflop", "motor", "turno", "stats", "rangos",
-            "abstraccion", "blueprint_data", "torneo", "subjuego",
-            "preflop", "postflop", "estrategia",
+            "abstraccion", "blueprint_data", "blueprint_6max", "torneo",
+            "subjuego", "preflop", "postflop", "estrategia",
         ]
         for mn in mod_names:
             if mn in sys.modules:

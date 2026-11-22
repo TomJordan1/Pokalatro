@@ -223,6 +223,17 @@ class ProtocoloTCPReal(unittest.TestCase):
         self.assertIsNotNone(res)
         self.assertEqual(res[0], "check")
 
+    def test_blueprint_6max_linear_mccfr_valido(self):
+        import blueprint_6max
+        self.assertGreater(len(blueprint_6max.PREFLOP_6MAX), 10)
+        self.assertGreater(len(blueprint_6max.POSTFLOP_6MAX), 1000)
+        for k, tabla in blueprint_6max.PREFLOP_6MAX.items():
+            self.assertEqual(len(tabla), 169)
+            self.assertAlmostEqual(sum(tabla[0]), 1.0, delta=0.02)
+        for k, probs in blueprint_6max.POSTFLOP_6MAX.items():
+            self.assertEqual(len(probs), 3)
+            self.assertAlmostEqual(sum(probs), 1.0, delta=0.02)
+
 
 if __name__ == "__main__":
     unittest.main()

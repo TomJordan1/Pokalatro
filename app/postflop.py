@@ -14,6 +14,10 @@ import random
 
 from abstraccion import bucket_facing, bucket_spr, bucket_textura, clasificar_mano_postflop
 from blueprint_data import POSTFLOP_BP
+try:
+    from blueprint_6max import POSTFLOP_6MAX
+except ImportError:
+    POSTFLOP_6MAX = {}
 from motor import equity
 from rangos import rango_rival, rangos_de_la_mesa
 from subjuego import resolver_river_hu
@@ -102,10 +106,13 @@ def decidir_postflop(t, cartas=None):
         h.get("etapa") == t.etapa for h in t.historial
     )
     fac_b = bucket_facing(t.por_igualar, t.pozo, t.subidas_en_esta_calle, ya_actuo)
-    bp_0, bp_1, bp_2 = POSTFLOP_BP.get(
-        (st_idx, spr_b, pos_b, mw_b, made_tier, 0 if river else draw_tier, fac_b),
-        (0.5, 0.5, 0.0),
-    )
+    bp_key = (st_idx, spr_b, pos_b, mw_b, made_tier, 0 if river else draw_tier, fac_b)
+    bp_0, bp_1, bp_2 = POSTFLOP_BP.get(bp_key, (0.5, 0.5, 0.0))
+    if usar_bp and POSTFLOP_6MAX and not ablate.get("no_blueprint6max") and bp_key in POSTFLOP_6MAX:
+        b6_0, b6_1, b6_2 = POSTFLOP_6MAX[bp_key]
+        bp_0 = 0.40 * bp_0 + 0.60 * b6_0
+        bp_1 = 0.40 * bp_1 + 0.60 * b6_1
+        bp_2 = 0.40 * bp_2 + 0.60 * b6_2
 
     fold_medio, conf_media, estacion, nits, loco = _lecturas(t, rivales)
     if not usar_exploit:
@@ -116,8 +123,6 @@ def decidir_postflop(t, cartas=None):
         sub_res = resolver_river_hu(t, rangos[0], e, made_tier, estacion, nits, loco)
         if sub_res is not None:
             s_tipo, s_frac, s_ev = sub_res
-            # Mezcla regularizada: si el EV extra es claro o la confianza es alta, seguir subjuego;
-            # si hay poca confianza y es marginal, permitir ancla de Blueprint.
             if s_tipo == "bet" and (t.puede("bet") or t.puede("raise")):
                 return t.apostar_pozo(s_frac), f"subjuego river bet {s_frac:.2f}p (eq {e:.0%})"
             if s_tipo == "raise" and t.puede("raise"):
@@ -129,12 +134,10 @@ def decidir_postflop(t, cartas=None):
                     return t.pagar(), f"subjuego river call (eq {e:.0%} vs {req_s:.0%})"
                 return t.pasar_o_retirarse(), f"subjuego+torneo fold (eq {e:.0%} vs {req_s:.0%})"
             if s_tipo == "fold" and t.por_igualar > 0:
-                # Si el blueprint insiste en pagar bluff-catcher con muy alta prob y rival es desconocido
                 if usar_bp and conf_media < 0.25 and bp_1 >= 0.72 and e >= t.pot_odds * 0.92:
                     return t.pagar(), f"bluff-catch blueprint (eq {e:.0%})"
                 return t.pasar_o_retirarse(), f"subjuego river fold (eq {e:.0%})"
             if s_tipo == "check" and t.por_igualar == 0:
-                # Permitir farol ocasional con bloqueador de nuts si rival foldea mucho
                 if (usar_exploit and nut_blocker and made_tier == 0 and not estacion
                         and fold_medio >= 0.50 and random.random() < 0.22):
                     return t.apostar_pozo(0.60), "farol river con nut blocker"
