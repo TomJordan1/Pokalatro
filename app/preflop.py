@@ -246,10 +246,12 @@ def decidir_preflop(t, cartas=None):
     if subidas == 2 and eff_bb <= 35 and ((pct <= 0.030 and e >= 0.49) or (p_4b_bp >= 0.72 and e >= 0.47)):
         return t.todo(), f"4-bet all-in (eq {e:.0%})"
 
-    if e >= 0.56 and t.compromiso > 0.35 and t.puede("allin"):
-        return t.todo(), f"all-in comprometido (eq {e:.0%})"
+    if e >= 0.56 and t.compromiso > 0.35:
+        if t.puede("allin"):
+            return t.todo(), f"all-in comprometido (eq {e:.0%})"
+        return t.pagar(), f"pago comprometido (eq {e:.0%})"
 
-    if e >= req and t.compromiso <= 0.32:
+    if e >= req and t.compromiso <= 0.35:
         return t.pagar(), f"pago 3-bet (eq {e:.0%} vs {req:.0%})"
 
     p_c3b_bp = bp_call_3b[idx_h] if usar_bp else 0.0

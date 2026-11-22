@@ -74,8 +74,11 @@ def resolver_river_hu(t, rango, equity_exacta, made_tier, estacion, nit, loco):
     pozo = float(t.pozo)
     eff = float(min(t.saldo, rival.get("saldo", 0)))
 
-    # --- Caso 1: Nadie aposto aun -> comparar Check vs Bet (0.45p, 0.80p, 1.10p)
+    # --- Caso 1: Nadie aposto aun -> comparar Check vs Bet por valor (0.45p, 0.80p, 1.10p)
+    # Los faroles con aire puro se dejan al bloque controlado con bloqueadores en postflop.py.
     if t.por_igualar == 0:
+        if equity_exacta < 0.45:
+            return ("check", None, 0.0)
         ev_check = equity_exacta * pozo
         mejor_ev = ev_check
         mejor_frac = None
@@ -110,6 +113,8 @@ def resolver_river_hu(t, rango, equity_exacta, made_tier, estacion, nit, loco):
                 elif mio == v:
                     win_call += 0.5 * take
             eq_call = (win_call / w_acc) if w_acc > 0.0 else equity_exacta
+            if eq_call < 0.50:
+                continue
 
             # Riesgo implicito de recibir raise cuando apostamos marginal (descuento conservador)
             raise_penalty = 0.0

@@ -6,7 +6,7 @@ echo ==============================================
 echo   Pokalatro - conexion al servidor de pruebas
 echo ==============================================
 echo.
-set "SERVIDOR=32.201.29.142"
+set "SERVIDOR=34.230.114.164"
 set "PUERTO=9000"
 echo Comprobando que el servidor responda en %SERVIDOR%:%PUERTO% ...
 powershell -NoProfile -Command "if ((Test-NetConnection %SERVIDOR% -Port %PUERTO% -WarningAction SilentlyContinue).TcpTestSucceeded) { Write-Host 'OK: el servidor responde.' -ForegroundColor Green; exit 0 } else { Write-Host 'El servidor NO responde todavia. El bot igual va a reintentar solo.' -ForegroundColor Yellow; exit 0 }"
