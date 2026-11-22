@@ -198,6 +198,42 @@ class ProtocoloTCPReal(unittest.TestCase):
         self.assertEqual(recibidos[1]["id_mano"], "tcp-1")
         self.assertIn(recibidos[1]["accion"]["tipo"], ("raise", "allin", "call"))
 
+    def test_preflop_sin_zona_muerta_ante_4bet_y_river_no_farolea_aire_100pct(self):
+        # 1. Ante 4-bet con compromiso en (0.32, 0.35] (por_igualar=3300 sobre techo=10000 -> 0.33),
+        #    una mano fuerte (QQ) nunca puede caer en zona muerta y foldear.
+        hist = [
+            {"id_jugador": "r1", "etapa": "preflop", "accion": {"tipo": "raise", "monto": 300}},
+            {"id_jugador": "yo", "etapa": "preflop", "accion": {"tipo": "raise", "monto": 900}},
+            {"id_jugador": "r1", "etapa": "preflop", "accion": {"tipo": "raise", "monto": 4200}},
+        ]
+        t = hacer_turno(
+            "Qs Qd", "", apuesta_actual=4200, mi_apuesta=900, pozo=5100, saldo=9100,
+            validas=("fold", "call", "raise", "allin"), historial=hist,
+        )
+        acc, _ = decidir(t)
+        self.assertIn(acc["tipo"], ("call", "allin", "raise"))
+
+        # 2. En river HU sin apuesta pendiente, aire puro (eq 5%) no debe recibir bet determinista
+        t_riv = hacer_turno(
+            "7c 2d", "Ah Kh Qc Jd 9s", apuesta_actual=0, mi_apuesta=0, pozo=1000, saldo=8000,
+            validas=("check", "bet", "allin"),
+        )
+        r = rangos.rango_rival(t_riv, t_riv.rivales[0])
+        res = subjuego.resolver_river_hu(t_riv, r, 0.05, 0, False, False, False)
+        self.assertIsNotNone(res)
+        self.assertEqual(res[0], "check")
+
+    def test_blueprint_6max_linear_mccfr_valido(self):
+        import blueprint_6max
+        self.assertGreater(len(blueprint_6max.PREFLOP_6MAX), 10)
+        self.assertGreater(len(blueprint_6max.POSTFLOP_6MAX), 1000)
+        for k, tabla in blueprint_6max.PREFLOP_6MAX.items():
+            self.assertEqual(len(tabla), 169)
+            self.assertAlmostEqual(sum(tabla[0]), 1.0, delta=0.02)
+        for k, probs in blueprint_6max.POSTFLOP_6MAX.items():
+            self.assertEqual(len(probs), 3)
+            self.assertAlmostEqual(sum(probs), 1.0, delta=0.02)
+
 
 if __name__ == "__main__":
     unittest.main()

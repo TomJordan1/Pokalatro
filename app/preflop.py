@@ -13,6 +13,10 @@ import random
 
 from abstraccion import indice_clase, percentil_jugabilidad
 from blueprint_data import PREFLOP_DEEP
+try:
+    from blueprint_6max import PREFLOP_6MAX
+except ImportError:
+    PREFLOP_6MAX = {}
 from motor import equity
 from rangos import rango_rival
 from torneo import factor_presion_eliminacion, minimo_por_supervivencia, probs_push_fold
@@ -32,6 +36,21 @@ def _pos_blueprint(t):
     if det == 2:
         return "CO"
     return "EP"
+
+
+def _pos_6max(t):
+    if t.es_bb:
+        return 5
+    if t.es_sb:
+        return 4
+    det = t.detras()
+    if det <= 2:
+        return 3  # BTN
+    if det == 3:
+        return 2  # CO
+    if det == 4:
+        return 1  # HJ
+    return 0      # UTG
 
 
 def _factor_robo(t):
@@ -136,6 +155,8 @@ def decidir_preflop(t, cartas=None):
     # --- 2. Nadie subio todavia ----------------------------------------------
     pos_key = _pos_blueprint(t)
     bp_open, bp_call_o, bp_3b_o, bp_call_3b, bp_4b = PREFLOP_DEEP[pos_key]
+    usar_bp6 = usar_bp and bool(PREFLOP_6MAX) and not ablate.get("no_blueprint6max")
+    p6_idx = _pos_6max(t)
 
     if subidas == 0:
         limite = _apertura(t)
@@ -168,8 +189,12 @@ def decidir_preflop(t, cartas=None):
                     return t.pagar(), "overlimp especulativo en boton"
             return t.pasar_o_retirarse(), "no vale aislar/limpear"
 
-        # Unopened pot: combinar Blueprint CFR+ con ajuste de robo
+        # Unopened pot: combinar Blueprint CFR+ (y 6-max Linear MCCFR) con ajuste de robo
         p_bp = bp_open[idx_h] if usar_bp else (1.0 if pct <= limite else 0.0)
+        if usar_bp6 and (p6_idx, 0) in PREFLOP_6MAX:
+            _, p_limp6, p_open6 = PREFLOP_6MAX[(p6_idx, 0)][idx_h]
+            # En 6-max Linear MCCFR, abrir + parte del limp representan manos jugables
+            p_bp = 0.45 * p_bp + 0.55 * min(1.0, p_open6 + 0.35 * p_limp6)
         p_heu = 1.0 if pct <= limite else 0.0
         p_abrir = 0.35 * p_bp + 0.65 * p_heu
         if _factor_robo(t) > 1.15 and pct <= limite:
@@ -213,6 +238,11 @@ def decidir_preflop(t, cartas=None):
         conf_sub = st_sub.confianza if st_sub else 0.0
 
         p_3b_bp = bp_3b_o[idx_h] if usar_bp else 0.0
+        p_call_bp = bp_call_o[idx_h] if usar_bp else 0.0
+        if usar_bp6 and (p6_idx, 2) in PREFLOP_6MAX:
+            _, pc6, p3b6 = PREFLOP_6MAX[(p6_idx, 2)][idx_h]
+            p_3b_bp = 0.45 * p_3b_bp + 0.55 * p3b6
+            p_call_bp = 0.45 * p_call_bp + 0.55 * pc6
         if pct <= 0.085 and ((conf_sub >= 0.3 and pfr_sub >= 0.25) or p_3b_bp >= 0.45):
             return t.apostar(t.apuesta_actual * 3.0), f"3-bet valor/balance (pfr {pfr_sub:.0%})"
 
@@ -222,7 +252,6 @@ def decidir_preflop(t, cartas=None):
                 return t.apostar(t.apuesta_actual * 3.0), "3-bet presion vs fold alto"
 
         # Evaluar call combinando equity real + blueprint
-        p_call_bp = bp_call_o[idx_h] if usar_bp else 0.0
         req_call = req
         if t.compromiso > 0.25:
             req_call = minimo_por_supervivencia(t, 2, req * 1.12)
@@ -243,16 +272,22 @@ def decidir_preflop(t, cartas=None):
         return t.todo(), "premium ante resubida: all-in"
 
     p_4b_bp = bp_4b[idx_h] if usar_bp else 0.0
+    p_c3b_bp = bp_call_3b[idx_h] if usar_bp else 0.0
+    if usar_bp6 and (p6_idx, 3) in PREFLOP_6MAX:
+        _, pc3b6, p4b6 = PREFLOP_6MAX[(p6_idx, 3)][idx_h]
+        p_4b_bp = 0.45 * p_4b_bp + 0.55 * p4b6
+        p_c3b_bp = 0.45 * p_c3b_bp + 0.55 * pc3b6
     if subidas == 2 and eff_bb <= 35 and ((pct <= 0.030 and e >= 0.49) or (p_4b_bp >= 0.72 and e >= 0.47)):
         return t.todo(), f"4-bet all-in (eq {e:.0%})"
 
-    if e >= 0.56 and t.compromiso > 0.35 and t.puede("allin"):
-        return t.todo(), f"all-in comprometido (eq {e:.0%})"
+    if e >= 0.56 and t.compromiso > 0.35:
+        if t.puede("allin"):
+            return t.todo(), f"all-in comprometido (eq {e:.0%})"
+        return t.pagar(), f"pago comprometido (eq {e:.0%})"
 
-    if e >= req and t.compromiso <= 0.32:
+    if e >= req and t.compromiso <= 0.35:
         return t.pagar(), f"pago 3-bet (eq {e:.0%} vs {req:.0%})"
 
-    p_c3b_bp = bp_call_3b[idx_h] if usar_bp else 0.0
     if usar_bp and subidas == 2 and p_c3b_bp >= 0.60 and e >= req * 0.93 and t.compromiso <= 0.18:
         return t.pagar(), f"pago 3-bet blueprint (eq {e:.0%})"
 
